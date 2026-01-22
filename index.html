@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f5f7fb" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <title>鎖模力計算器 · v4.2 Light（Kp vs 壓力法比較）</title>
+  <style>
+    /* ===== Light Theme Variables ===== */
+    :root{
+      --bg:#f7fafc;            /* 背景 */
+      --panel:#ffffff;         /* 卡片底色 */
+      --border:#d8dee9;        /* 邊框 */
+      --accent:#0ea5e9;        /* 重點色（天藍）*/
+      --accent-strong:#0284c7; /* 深藍 */
+      --text:#0f172a;          /* 主要文字（深灰藍）*/
+      --muted:#475569;         /* 次要文字 */
+      --muted-2:#64748b;       /* 較淡次要 */
+      --ok:#16a34a;            /* 綠 */
+      --warn:#d97706;          /* 橘 */
+      --bad:#dc2626;           /* 紅 */
+      --shadow:0 6px 18px rgba(15,23,42,0.08);
+      --input-bg:#ffffff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,"Microsoft JhengHei",Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{padding:20px;text-align:center}
+    h1{margin:0;font-size:1.4rem;color:var(--accent-strong)}
+    .container{max-width:1150px;margin:0 auto;padding:16px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin:16px 0;box-shadow:var(--shadow)}
+    label{display:block;margin:10px 0 6px;color:var(--muted);font-size:.95rem}
+    input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)}
+    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+    .methods{display:flex;gap:8px;margin-top:8px}
+    .toggle{flex:1;padding:10px;text-align:center;border-radius:10px;cursor:pointer;background:#eef2f7;border:1px solid var(--border);color:var(--muted)}
+    .toggle.active{background:#e0f2fe;border-color:#bae6fd;color:#075985}
+    .result{font-size:clamp(28px,6vw,48px);color:var(--accent-strong);font-weight:800;text-align:center}
+    .hint{color:var(--muted-2)}
+    .btn{background:var(--accent);color:#fff;padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
+    .btn.secondary{background:#eef2f7;border:1px solid var(--border);color:#0f172a}
+    .btn.ghost{background:transparent;border:1px dashed var(--border);color:#0f172a}
+    .btn.danger{background:#dc2626}
+    .pill{display:inline-block;background:#eef2f7;border:1px solid var(--border);color:#0f172a;padding:6px 10px;border-radius:999px;font-size:12px}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+    .flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+    /* Hard Align（薄壁/深度整組靠左） */
+    .optionBlock{display:block;margin:14px 0;padding:0;justify-self:start;align-self:start}
+    .optionLine{display:inline-flex;gap:10px;align-items:flex-start;justify-content:flex-start;text-align:left}
+    .optionSub{margin-left:32px;margin-top:6px;max-width:520px;text-align:left}
+    .optionBlock, .optionLine, .optionSub{grid-column:1 / -1 !important; text-align:left !important}
+
+    @media(max-width:640px){
+      .row{grid-template-columns:1fr}
+      .grid-2{grid-template-columns:1fr}
+      .grid-3{grid-template-columns:1fr}
+      .optionSub{margin-left:24px}
+    }
+
+    .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, monospace;background:#eef2f7;border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:#0f172a}
+    .metric{font-weight:700}
+    .bigger{font-size:clamp(22px,4.8vw,34px)}
+    .ok{color:var(--ok)}
+    .warn{color:var(--warn)}
+    .bad{color:var(--bad)}
+    .blue{color:#075985}
+    .sep{height:1px;background:var(--border);margin:12px 0}
+    footer{color:var(--muted-2)}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>鎖模力計算器（Clamping Force）— v4.2 Light</h1>
+    <div class="hint">更淡的淺色主題，提升可讀性；保留：Kp vs 壓力法比較、材料搜尋、30 材料（Kp + 建議 P）、薄壁/深度補償、多模穴、PWA。</div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <div class="methods">
+        <div class="toggle active" id="methodPressure">壓力法</div>
+        <div class="toggle" id="methodKp">Kp 法</div>
+      </div>
+
+      <!-- 壓力法 -->
+      <div id="formPressure">
+        <div class="row" style="margin-top:8px">
+          <div class="col" style="grid-column:span 6"><label>投影面積 A（cm²）</label><input id="areaP" type="number" inputmode="decimal" placeholder="例如 400"></div>
+          <div class="col" style="grid-column:span 6"><label>模穴數 N（多模穴）</label><input id="cavP" type="number" min="1" step="1" value="1"></div>
+          <div class="col" style="grid-column:span 6"><label>材料（30 種，分組）</label><select id="materialSelP"></select></div>
+          <div class="col" style="grid-column:span 6"><label>模穴壓力 P</label><input id="pressure" type="number" inputmode="decimal" placeholder="例如 350"></div>
+          <div class="col" style="grid-column:span 6"><label>壓力單位</label><select id="pUnit"><option value="kgcm2" selected>kg/cm²</option><option value="bar">bar</option><option value="mpa">MPa</option></select></div>
+          <div class="col" style="grid-column:span 6"><label>安全係數（例如 1.10 代表 +10%）</label><input id="sfP" type="number" inputmode="decimal" value="1.10" step="0.01"></div>
+          <div class="col" style="grid-column:span 6;display:flex;gap:8px;align-items:end"><button class="btn" id="calcP">計算</button><button class="btn ghost" id="pushToK">→ 將 A/N/補償 帶到 Kp 法</button></div>
+        </div>
+
+        <div class="optionBlock">
+          <label class="optionLine">
+            <input id="twEnableP" type="checkbox"> 1. 啟用薄壁補償（依最薄壁厚自動提高安全係數）
+          </label>
+          <div class="optionSub" id="twRowP" style="display:none">
+            <label>最薄壁厚 t（mm）</label>
+            <input id="tMinP" type="number" step="0.01" placeholder="例如 0.6" style="max-width:260px">
+          </div>
+        </div>
+
+        <div class="optionBlock">
+          <label class="optionLine">
+            <input id="depthEnableP" type="checkbox"> 2. 啟用深度補償（依產品高度自動提高鎖模力）
+          </label>
+          <div class="optionSub" id="depthRowP" style="display:none">
+            <label>產品高度 H</label>
+            <div style="display:flex;gap:8px;max-width:420px">
+              <input id="depthP" type="number" step="0.1" placeholder="例如 50" style="flex:1">
+              <select id="depthUnitP" style="width:120px"><option value="mm" selected>mm</option><option value="cm">cm</option><option value="in">inch</option></select>
+            </div>
+            <div class="hint" style="margin-top:6px">規則：F = F × (1 + 0.10 × H/25)，H 會依單位換算為 mm（cm ×10；inch ×25.4）。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kp 法 -->
+      <div id="formKp" style="display:none">
+        <div class="row" style="margin-top:8px">
+          <div class="col" style="grid-column:span 6"><label>投影面積 A（cm²）</label><input id="areaK" type="number" inputmode="decimal" placeholder="例如 400"></div>
+          <div class="col" style="grid-column:span 6"><label>模穴數 N（多模穴）</label><input id="cavK" type="number" min="1" step="1" value="1"></div>
+          <div class="col" style="grid-column:span 6"><label>材料（30 種，分組）</label><select id="materialSel"></select></div>
+          <div class="col" style="grid-column:span 6"><label>Kp（t/cm²）</label><input id="kp" type="number" inputmode="decimal" placeholder="選材後自動帶入，亦可手動調整"></div>
+          <div class="col" style="grid-column:span 6"><label>安全係數（例如 1.10 代表 +10%）</label><input id="sfK" type="number" inputmode="decimal" value="1.10" step="0.01"></div>
+          <div class="col" style="grid-column:span 6;display:flex;gap:8px;align-items:end"><button class="btn" id="calcK">計算</button><button class="btn ghost" id="pushToP">← 將 A/N/補償 帶到 壓力法</button></div>
+        </div>
+
+        <div class="optionBlock">
+          <label class="optionLine">
+            <input id="twEnableK" type="checkbox"> 1. 啟用薄壁補償（依最薄壁厚自動提高安全係數）
+          </label>
+          <div class="optionSub" id="twRowK" style="display:none">
+            <label>最薄壁厚 t（mm）</label>
+            <input id="tMinK" type="number" step="0.01" placeholder="例如 0.6" style="max-width:260px">
+          </div>
+        </div>
+
+        <div class="optionBlock">
+          <label class="optionLine">
+            <input id="depthEnableK" type="checkbox"> 2. 啟用深度補償（依產品高度自動提高鎖模力）
+          </label>
+          <div class="optionSub" id="depthRowK" style="display:none">
+            <label>產品高度 H</label>
+            <div style="display:flex;gap:8px;max-width:420px">
+              <input id="depthK" type="number" step="0.1" placeholder="例如 50" style="flex:1">
+              <select id="depthUnitK" style="width:120px"><option value="mm" selected>mm</option><option value="cm">cm</option><option value="in">inch</option></select>
+            </div>
+            <div class="hint" style="margin-top:6px">規則：F = F × (1 + 0.10 × H/25)，H 會依單位換算為 mm（cm ×10；inch ×25.4）。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 結果 / 公式 -->
+    <div class="card">
+      <div class="grid-2">
+        <div>
+          <div class="pill">結果 Result</div>
+          <div class="result" id="resultValue">— 噸</div>
+          <div class="hint" id="recommend">請輸入數值開始計算</div>
+          <div class="hint" id="tonSuggest" style="margin-top:8px"></div>
+        </div>
+        <div>
+          <div class="pill">公式 Formula</div>
+          <div class="hint" style="margin-top:8px">
+            <div id="formulaText"><b>壓力法：</b>F = A × P / 1000 × 安全係數（含補償）</div>
+            <ul>
+              <li>A：投影面積（含製品、流道、冷料井）</li>
+              <li>P：模穴平均壓力（kg/cm² / bar / MPa）</li>
+              <li>安全係數：常用 +10%～20%</li>
+              <li>薄壁補償：t ≥ 1.0 → +0%；0.7–1.0 → +10%；0.5–0.7 → +20%；t &lt; 0.5 → +30%</li>
+              <li>深度補償：每 +25 mm → +10%（連續化）</li>
+              <li>N：多模穴 → A_total = A_single × N</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 比較 Compare -->
+    <div class="card">
+      <div class="pill">Kp vs 壓力法 比較</div>
+      <div class="hint" style="margin-top:6px">輸入兩邊必要欄位後，按任一「計算」即顯示比較；也可用上方「→ / ←」按鈕同步 A / N / 補償。</div>
+      <div class="grid-3" style="margin-top:10px">
+        <div>
+          <div class="pill">壓力法</div>
+          <div class="bigger metric" id="cmpP">— 噸</div>
+          <div class="hint" id="cmpPdetails"></div>
+        </div>
+        <div>
+          <div class="pill">Kp 法</div>
+          <div class="bigger metric" id="cmpK">— 噸</div>
+          <div class="hint" id="cmpKdetails"></div>
+        </div>
+        <div>
+          <div class="pill">差異</div>
+          <div class="bigger metric" id="cmpDelta">— %</div>
+          <div class="hint" id="cmpAdvice"></div>
+        </div>
+      </div>
+      <div class="sep"></div>
+      <div class="flex">
+        <button class="btn secondary" id="suggestP">依 Kp 反推建議 P（kg/cm²）</button>
+        <span class="hint">這會以 <span class="kbd">P≈Kp×1000</span> 的等效概念回推，做為壓力法起始參考。</span>
+      </div>
+      <div class="hint" id="suggestPText" style="margin-top:6px"></div>
+    </div>
+
+    <!-- 材料清單 + 搜尋（沿用） -->
+    <div class="card" id="materialsCard">
+      <div class="pill">常用材料清單（30 種）— 可新增 / 編輯 / 刪除（本機保存）</div>
+      <div class="flex" style="margin-top:10px">
+        <div style="flex:1; min-width:220px">
+          <label>材料搜尋（名稱 / 分組 / Kp / 建議P）</label>
+          <input id="matSearch" placeholder="例如：PC、ABS、工程塑料、0.75、450...">
+        </div>
+        <button class="btn secondary" id="clearSearch">清除搜尋</button>
+      </div>
+      <div class="hint" style="margin-top:6px">搜尋結果會同步影響：材料表格、Kp 法材料下拉、壓力法材料下拉。</div>
+
+      <div class="row" style="margin-top:12px">
+        <div class="col" style="grid-column:span 3"><label>材料名稱</label><input id="matName" placeholder="例如：PC/ABS"></div>
+        <div class="col" style="grid-column:span 3"><label>建議 Kp（t/cm²）</label><input id="matKp" type="number" inputmode="decimal" placeholder="例如：0.75"></div>
+        <div class="col" style="grid-column:span 3"><label>建議 P（kg/cm²）</label><input id="matP" type="number" inputmode="decimal" placeholder="例如：350"></div>
+        <div class="col" style="grid-column:span 3"><label>分組（例如：高流動 / 工程塑料）</label><input id="matGroup" placeholder="例如：高性能工程塑料"></div>
+        <div class="col" style="grid-column:span 12;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" id="addMat">新增 / 更新</button><button class="btn secondary" id="resetMat">重置為預設 30 種</button><button class="btn secondary" id="exportMat">匯出 JSON</button><input type="file" id="importFile" accept="application/json" style="display:none" /><button class="btn secondary" id="importMat">匯入 JSON</button></div>
+      </div>
+      <div style="margin-top:10px;overflow:auto">
+        <table>
+          <thead><tr><th style="width:30%">材料</th><th style="width:16%">Kp</th><th style="width:20%">建議 P (kg/cm²)</th><th style="width:24%">分組</th><th style="width:10%">操作</th></tr></thead>
+          <tbody id="matTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 設定 -->
+    <div class="card" id="settingsCard">
+      <div class="pill">設定 Settings</div>
+      <div class="hint" style="margin-top:6px">自訂「機台噸位清單」：以逗號分隔，例如：50,80,100,120,130,150,160,180,200,220</div>
+      <div class="row" style="margin-top:8px">
+        <div class="col" style="grid-column:span 9"><label>噸位清單（逗號分隔）</label><textarea id="tonsInput" rows="3" placeholder="50,80,100,120,130,150,160,180,200,220,250,280,300,350,400,450,500,650,800"></textarea></div>
+        <div class="col" style="grid-column:span 3;display:flex;gap:8px;align-items:end;flex-wrap:wrap"><button class="btn" id="saveTons">儲存</button><button class="btn secondary" id="resetTons">重置預設</button></div>
+      </div>
+      <div class="hint" id="tonsStatus" style="margin-top:6px"></div>
+    </div>
+
+    <div class="muted" style="text-align:right; font-size:12px">App 版本：v4.2 Light · 2026‑01‑19</div>
+  </div>
+
+  <footer style="text-align:center;color:var(--muted-2);font-size:12px;padding: 8px 0 24px">© 2026 Clamping Force Calculator · PWA</footer>
+
+  <script>
+    // ===== 既有 JS（計算 / 比較 / 材料搜尋 / PWA）沿用 v4.2 =====
+
+    const DEFAULT_MATS = [
+      {name:'PP',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},{name:'PE-HD',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},{name:'PE-LD',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},{name:'PE-LLD',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},{name:'PS',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},{name:'HIPS',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},{name:'PP-Copolymer',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},{name:'EVA',kp:0.32,p:300,group:'高流動 (Kp≈0.32)'},
+      {name:'ABS',kp:0.42,p:350,group:'中等流動 (ABS/透明系)'},{name:'SAN',kp:0.42,p:350,group:'中等流動 (ABS/透明系)'},{name:'ASA',kp:0.42,p:350,group:'中等流動 (ABS/透明系)'},{name:'MABS',kp:0.42,p:350,group:'中等流動 (ABS/透明系)'},{name:'PMMA',kp:0.42,p:350,group:'中等流動 (ABS/透明系)'},{name:'PETG',kp:0.42,p:350,group:'中等流動 (ABS/透明系)'},
+      {name:'PA6',kp:0.68,p:430,group:'工程塑料/玻纖 (Kp≈0.68)'},{name:'PA66',kp:0.68,p:430,group:'工程塑料/玻纖 (Kp≈0.68)'},{name:'PA12',kp:0.68,p:420,group:'工程塑料/玻纖 (Kp≈0.68)'},{name:'POM',kp:0.68,p:400,group:'工程塑料/玻纖 (Kp≈0.68)'},{name:'PP+GF',kp:0.68,p:450,group:'工程塑料/玻纖 (Kp≈0.68)'},{name:'PA+GF',kp:0.68,p:450,group:'工程塑料/玻纖 (Kp≈0.68)'},{name:'PET+GF',kp:0.68,p:450,group:'工程塑料/玻纖 (Kp≈0.68)'},{name:'PBT+GF',kp:0.68,p:440,group:'工程塑料/玻纖 (Kp≈0.68)'},
+      {name:'PC',kp:0.75,p:450,group:'高性能工程塑料 (Kp≈0.75–0.80)'},{name:'PC/ABS',kp:0.75,p:420,group:'高性能工程塑料 (Kp≈0.75–0.80)'},{name:'PBT',kp:0.75,p:420,group:'高性能工程塑料 (Kp≈0.75–0.80)'},{name:'PET',kp:0.75,p:420,group:'高性能工程塑料 (Kp≈0.75–0.80)'},{name:'PPO/PPE',kp:0.75,p:450,group:'高性能工程塑料 (Kp≈0.75–0.80)'},{name:'PSU',kp:0.75,p:460,group:'高性能工程塑料 (Kp≈0.75–0.80)'},{name:'PPS',kp:0.78,p:470,group:'高性能工程塑料 (Kp≈0.75–0.80)'},{name:'PEEK',kp:0.80,p:480,group:'高性能工程塑料 (Kp≈0.75–0.80)'}
+    ];
+
+    const methodPressure=document.getElementById('methodPressure');
+    const methodKp=document.getElementById('methodKp');
+    const formPressure=document.getElementById('formPressure');
+    const formKp=document.getElementById('formKp');
+    const formulaText=document.getElementById('formulaText');
+    function setActive(method){ if(method==='P'){ methodPressure.classList.add('active'); methodKp.classList.remove('active'); formPressure.style.display='block'; formKp.style.display='none'; if(formulaText) formulaText.innerHTML='<b>壓力法：</b>F = A × P / 1000 × 安全係數（含補償）'; } else { methodKp.classList.add('active'); methodPressure.classList.remove('active'); formPressure.style.display='none'; formKp.style.display='block'; if(formulaText) formulaText.innerHTML='<b>Kp 法：</b>F = A × Kp × 安全係數（含補償）'; refreshMaterialSelects(); } }
+    methodPressure.addEventListener('click',()=>setActive('P'));
+    methodKp.addEventListener('click',()=>setActive('K'));
+
+    function bindToggle(id,row){ const cb=document.getElementById(id),r=document.getElementById(row); if(!cb||!r)return; const sync=()=>{r.style.display=cb.checked?'block':'none'}; cb.addEventListener('change',sync); sync(); }
+    bindToggle('twEnableP','twRowP'); bindToggle('twEnableK','twRowK'); bindToggle('depthEnableP','depthRowP'); bindToggle('depthEnableK','depthRowK');
+
+    function thinWallFactor(t){ if(!isFinite(t)||t<=0) return 1.0; if(t>=1.0) return 1.0; if(t>=0.7) return 1.10; if(t>=0.5) return 1.20; return 1.30; }
+    function depthToMM(v,u){ if(!isFinite(v)||v<=0) return 0; if(u==='mm') return v; if(u==='cm') return v*10; if(u==='in') return v*25.4; return v; }
+    function depthFactor(h){ if(!isFinite(h)||h<=0) return 1.0; return 1 + 0.10*(h/25); }
+    function formatTon(t){ if(!isFinite(t)) return '— 噸'; return Math.round(t).toLocaleString(undefined,{maximumFractionDigits:0}) + ' 噸'; }
+
+    function pToKgcm2(value, unit){ if(!isFinite(value)||value<=0) return 0; switch(unit){ case 'kgcm2': return value; case 'bar': return value*1.019716; case 'mpa': return value*10.197162; default: return value; } }
+    function kgcm2ToUnit(value, unit){ if(!isFinite(value)||value<=0) return 0; switch(unit){ case 'kgcm2': return value; case 'bar': return value/1.019716; case 'mpa': return value/10.197162; default: return value; } }
+    function toInt(v, d=1){ const n = parseInt(v,10); return (isFinite(n) && n>0) ? n : d; }
+
+    const DEFAULT_TONS=[50,80,100,120,130,150,160,180,200,220,250,280,300,350,400,450,500,650,800];
+    function loadTons(){ try{ const raw=localStorage.getItem('cf_tons'); if(!raw) return [...DEFAULT_TONS]; const arr=raw.split(',').map(s=>parseInt(s.trim(),10)).filter(n=>isFinite(n)&&n>0); return arr.length?arr:[...DEFAULT_TONS]; }catch{return [...DEFAULT_TONS];} }
+    function saveTonsFromInput(){ const ta=document.getElementById('tonsInput'); if(!ta) return; const val=(ta.value||'').trim(); if(!val){ localStorage.removeItem('cf_tons'); setTonsStatus('已清除，自動回到預設清單'); return; } localStorage.setItem('cf_tons', val); setTonsStatus('已儲存噸位清單'); }
+    function resetTons(){ localStorage.removeItem('cf_tons'); const ta=document.getElementById('tonsInput'); if(ta) ta.value=DEFAULT_TONS.join(','); setTonsStatus('已重置為預設清單'); }
+    function setTonsStatus(msg){ const el=document.getElementById('tonsStatus'); if(el) el.textContent=msg; }
+
+    let CURRENT_TONS = loadTons();
+
+    function nearestUp(list,v){ for(let i=0;i<list.length;i++){ if(list[i]>=v) return list[i]; } return list[list.length-1]; }
+    function nearestDown(list,v){ let prev=list[0]; for(let i=0;i<list.length;i++){ if(list[i]>v) return prev; prev=list[i]; } return list[list.length-1]; }
+    function buildRecommendations(F){ const ton=Math.ceil(F); const up=nearestUp(CURRENT_TONS,ton); const down=nearestDown(CURRENT_TONS,ton); const up2=nearestUp(CURRENT_TONS,Math.ceil(ton*1.1)); const choices=[...new Set([down,up,up2])].filter(Boolean).sort((a,b)=>a-b); return {ton,choices}; }
+
+    const tonsInput=document.getElementById('tonsInput');
+    if(tonsInput){ tonsInput.value = loadTons().join(','); }
+    const btnSaveTons=document.getElementById('saveTons'); if(btnSaveTons){ btnSaveTons.addEventListener('click', ()=>{ saveTonsFromInput(); CURRENT_TONS = loadTons(); setTonsStatus('已套用新清單'); }); }
+    const btnResetTons=document.getElementById('resetTons'); if(btnResetTons){ btnResetTons.addEventListener('click', ()=>{ resetTons(); CURRENT_TONS = loadTons(); }); }
+
+    const resultValue=document.getElementById('resultValue');
+    const recommend=document.getElementById('recommend');
+    function updateResult(F){ const suggest=document.getElementById('tonSuggest'); if(!isFinite(F)||F<=0){ if(resultValue) resultValue.textContent='— 噸'; if(recommend) recommend.textContent='請輸入數值開始計算'; if(suggest) suggest.textContent=''; return; } if(resultValue) resultValue.textContent = formatTon(F); if(recommend) recommend.textContent = '建議選擇噸位 ≥ 計算值的射出機，以避免飛邊。'; if(suggest){ const {ton,choices}=buildRecommendations(F); suggest.textContent = '噸位建議：' + choices.map(x=>x+'T').join(' ／ ') + '（計算值≈' + ton + 'T）'; } }
+
+    function loadMats(){ const raw = localStorage.getItem('cf_mats_kp_p'); if(!raw) return [...DEFAULT_MATS]; try{ const arr=JSON.parse(raw); return Array.isArray(arr)&&arr.length?arr:[...DEFAULT_MATS]; }catch{ return [...DEFAULT_MATS]; } }
+    function saveMats(arr){ localStorage.setItem('cf_mats_kp_p', JSON.stringify(arr)); }
+
+    const matTable=document.getElementById('matTable');
+    const matName=document.getElementById('matName');
+    const matKp=document.getElementById('matKp');
+    const matP=document.getElementById('matP');
+    const matGroup=document.getElementById('matGroup');
+    const addMat=document.getElementById('addMat');
+    const resetMat=document.getElementById('resetMat');
+    const exportMat=document.getElementById('exportMat');
+    const importMat=document.getElementById('importMat');
+    const importFile=document.getElementById('importFile');
+
+    const matSearch=document.getElementById('matSearch');
+    const clearSearch=document.getElementById('clearSearch');
+    function getQuery(){ return (matSearch?.value||'').trim().toLowerCase(); }
+    function matches(m, q){ if(!q) return true; return (m.name||'').toLowerCase().includes(q) || (m.group||'').toLowerCase().includes(q) || String(m.kp).includes(q) || String(m.p).includes(q); }
+
+    function renderTable(){ const mats=loadMats().filter(m=>matches(m,getQuery())); if(!matTable) return; matTable.innerHTML=''; mats.forEach((m,idx)=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${m.name}</td><td>${m.kp}</td><td>${m.p}</td><td>${m.group||''}</td><td style="display:flex;gap:6px"><button class='btn secondary' data-edit='${idx}'>編輯</button><button class='btn danger' data-del='${idx}'>刪除</button></td>`; matTable.appendChild(tr); }); }
+
+    if(matTable){ matTable.addEventListener('click', (e)=>{ const t=e.target; const mats=loadMats(); if(t.dataset.edit){ const i=parseInt(t.dataset.edit); const list=mats.filter(m=>matches(m,getQuery())); const m=list[i]; if(!m) return; matName.value=m.name; matKp.value=m.kp; matP.value=m.p; matGroup.value=m.group||''; } if(t.dataset.del){ const list=mats.filter(m=>matches(m,getQuery())); const i=parseInt(t.dataset.del); const target=list[i]; if(!target) return; const idx=mats.findIndex(x=>x.name===target.name); if(idx>=0){ mats.splice(idx,1); saveMats(mats); } renderTable(); refreshMaterialSelects(); } }); }
+
+    if(addMat){ addMat.addEventListener('click', ()=>{ const name=(matName.value||'').trim(); const kp=parseFloat(matKp.value); const p=parseFloat(matP.value); const group=(matGroup.value||'').trim(); if(!name||!isFinite(kp)||kp<=0||!isFinite(p)||p<=0){ alert('請輸入有效的 材料名稱 / Kp / 建議P'); return; } const mats=loadMats(); const idx=mats.findIndex(m=>m.name.toLowerCase()===name.toLowerCase()); if(idx>=0){ mats[idx].kp=kp; mats[idx].p=p; mats[idx].group=group; } else { mats.push({name, kp, p, group}); } saveMats(mats); renderTable(); refreshMaterialSelects(); matName.value=''; matKp.value=''; matP.value=''; matGroup.value=''; }); }
+
+    if(resetMat){ resetMat.addEventListener('click', ()=>{ saveMats(DEFAULT_MATS); renderTable(); refreshMaterialSelects(); }); }
+
+    if(exportMat){ exportMat.addEventListener('click', ()=>{ const a=document.createElement('a'); const blob=new Blob([JSON.stringify(loadMats(),null,2)], {type:'application/json'}); a.href=URL.createObjectURL(blob); a.download='materials_kp_p.json'; a.click(); }); }
+
+    if(importMat){ importMat.addEventListener('click', ()=> importFile.click()); }
+    if(importFile){ importFile.addEventListener('change', ()=>{ const file=importFile.files[0]; if(!file) return; const r=new FileReader(); r.onload=()=>{ try{ const arr=JSON.parse(r.result); if(Array.isArray(arr)&&arr.length){ saveMats(arr); renderTable(); refreshMaterialSelects(); } else alert('格式錯誤'); }catch{ alert('解析失敗'); } }; r.readAsText(file); }); }
+
+    if(matSearch){ matSearch.addEventListener('input', ()=>{ renderTable(); refreshMaterialSelects(); }); }
+    if(clearSearch){ clearSearch.addEventListener('click', ()=>{ if(matSearch) matSearch.value=''; renderTable(); refreshMaterialSelects(); }); }
+
+    const materialSel=document.getElementById('materialSel');
+    const materialSelP=document.getElementById('materialSelP');
+    const kpInput=document.getElementById('kp');
+    const pInput=document.getElementById('pressure');
+    const pUnitSel=document.getElementById('pUnit');
+
+    function refreshMaterialSelects(){ const matsAll=loadMats().filter(m=>matches(m,getQuery())); if(materialSel){ materialSel.innerHTML=''; const optCustom=document.createElement('option'); optCustom.value='custom'; optCustom.textContent='自訂（手動輸入 Kp）'; materialSel.appendChild(optCustom); const grouped={}; matsAll.forEach(m=>{ const g=m.group||'未分組'; (grouped[g]||(grouped[g]=[])).push(m); }); Object.keys(grouped).forEach(g=>{ const og=document.createElement('optgroup'); og.label=g; grouped[g].forEach(m=>{ const o=document.createElement('option'); o.value=m.name; o.textContent=`${m.name}（Kp=${m.kp}）`; og.appendChild(o); }); materialSel.appendChild(og); }); materialSel.onchange=()=>{ const v=materialSel.value; if(v==='custom'){ kpInput.value=''; return; } const found=loadMats().find(x=>x.name===v); kpInput.value = found?found.kp:''; } }
+      if(materialSelP){ materialSelP.innerHTML=''; const optCustomP=document.createElement('option'); optCustomP.value='custom'; optCustomP.textContent='自訂（手動輸入 P）'; materialSelP.appendChild(optCustomP); const groupedP={}; matsAll.forEach(m=>{ const g=m.group||'未分組'; (groupedP[g]||(groupedP[g]=[])).push(m); }); Object.keys(groupedP).forEach(g=>{ const og=document.createElement('optgroup'); og.label=g; groupedP[g].forEach(m=>{ const o=document.createElement('option'); o.value=m.name; o.textContent=`${m.name}（建議P=${m.p} kg/cm²）`; og.appendChild(o); }); materialSelP.appendChild(og); }); materialSelP.onchange=()=>{ const v=materialSelP.value; if(v==='custom'){ return; } const found=loadMats().find(x=>x.name===v); if(!found) return; const unit=pUnitSel?.value||'kgcm2'; const val=kgcm2ToUnit(found.p, unit); pInput.value = Math.round(val*10)/10; } }
+    }
+
+    document.getElementById('pushToK').addEventListener('click', ()=>{
+      const A=document.getElementById('areaP').value; const N=document.getElementById('cavP').value; const SF=document.getElementById('sfP').value; const tw=document.getElementById('twEnableP').checked; const t=document.getElementById('tMinP').value; const de=document.getElementById('depthEnableP').checked; const h=document.getElementById('depthP').value; const u=document.getElementById('depthUnitP').value;
+      document.getElementById('areaK').value=A; document.getElementById('cavK').value=N; document.getElementById('sfK').value=SF; document.getElementById('twEnableK').checked=tw; document.getElementById('tMinK').value=t; document.getElementById('depthEnableK').checked=de; document.getElementById('depthK').value=h; document.getElementById('depthUnitK').value=u; 
+      document.getElementById('twRowK').style.display=tw?'block':'none'; document.getElementById('depthRowK').style.display=de?'block':'none';
+    });
+    document.getElementById('pushToP').addEventListener('click', ()=>{
+      const A=document.getElementById('areaK').value; const N=document.getElementById('cavK').value; const SF=document.getElementById('sfK').value; const tw=document.getElementById('twEnableK').checked; const t=document.getElementById('tMinK').value; const de=document.getElementById('depthEnableK').checked; const h=document.getElementById('depthK').value; const u=document.getElementById('depthUnitK').value;
+      document.getElementById('areaP').value=A; document.getElementById('cavP').value=N; document.getElementById('sfP').value=SF; document.getElementById('twEnableP').checked=tw; document.getElementById('tMinP').value=t; document.getElementById('depthEnableP').checked=de; document.getElementById('depthP').value=h; document.getElementById('depthUnitP').value=u; 
+      document.getElementById('twRowP').style.display=tw?'block':'none'; document.getElementById('depthRowP').style.display=de?'block':'none';
+    });
+
+    function collectP(){
+      const A=parseFloat(document.getElementById('areaP').value), cav=toInt(document.getElementById('cavP').value||'1',1); const Atotal=(isFinite(A)?A:0)*cav; const P=parseFloat(document.getElementById('pressure').value); const pUnit=(document.getElementById('pUnit')?.value)||'kgcm2'; const Pkg=pToKgcm2(P,pUnit); const SF=parseFloat(document.getElementById('sfP').value||'1'); const tF=document.getElementById('twEnableP')?.checked?thinWallFactor(parseFloat(document.getElementById('tMinP').value)):1; const dVal=parseFloat(document.getElementById('depthP').value); const dU=document.getElementById('depthUnitP')?.value||'mm'; const dF=document.getElementById('depthEnableP')?.checked?depthFactor(depthToMM(dVal,dU)):1; return {Atotal, Pkg, SF, tF, dF}; }
+    function collectK(){
+      const A=parseFloat(document.getElementById('areaK').value), cav=toInt(document.getElementById('cavK').value||'1',1); const Atotal=(isFinite(A)?A:0)*cav; const Kp=parseFloat(document.getElementById('kp').value); const SF=parseFloat(document.getElementById('sfK').value||'1'); const tF=document.getElementById('twEnableK')?.checked?thinWallFactor(parseFloat(document.getElementById('tMinK').value)):1; const dVal=parseFloat(document.getElementById('depthK').value); const dU=document.getElementById('depthUnitK')?.value||'mm'; const dF=document.getElementById('depthEnableK')?.checked?depthFactor(depthToMM(dVal,dU)):1; return {Atotal, Kp, SF, tF, dF}; }
+
+    function calcPForce(c){ if(!c) return NaN; const F=(c.Atotal*c.Pkg/1000)*(isFinite(c.SF)?c.SF:1)*(isFinite(c.tF)?c.tF:1)*(isFinite(c.dF)?c.dF:1); return F; }
+    function calcKForce(c){ if(!c) return NaN; const F=(c.Atotal*c.Kp)*(isFinite(c.SF)?c.SF:1)*(isFinite(c.tF)?c.tF:1)*(isFinite(c.dF)?c.dF:1); return F; }
+
+    function updateCompare(){
+      const p=collectP(); const k=collectK(); const Fp=calcPForce(p); const Fk=calcKForce(k);
+      const elP=document.getElementById('cmpP'); const elK=document.getElementById('cmpK'); const elD=document.getElementById('cmpDelta'); const d1=document.getElementById('cmpPdetails'); const d2=document.getElementById('cmpKdetails'); const adv=document.getElementById('cmpAdvice');
+      const fmt=(x)=> isFinite(x)&&x>0 ? Math.round(x).toLocaleString()+ ' 噸' : '— 噸';
+      if(elP) elP.textContent=fmt(Fp); if(elK) elK.textContent=fmt(Fk);
+      if(d1) d1.textContent = (isFinite(p?.Pkg)?`P≈${Math.round(p.Pkg)} kg/cm²`:'') + (isFinite(p?.SF)?`，SF=${p.SF}`:'');
+      if(d2) d2.textContent = (isFinite(k?.Kp)?`Kp=${k.Kp}`:'') + (isFinite(k?.SF)?`，SF=${k.SF}`:'');
+      if(isFinite(Fp) && isFinite(Fk) && Fp>0 && Fk>0){ const diff=((Fk-Fp)/Fp)*100; const sign= diff>=0?'+':''; elD.textContent= sign + Math.round(diff) + ' %'; if(diff>20){ adv.textContent='Kp 法顯著高於壓力法，可能代表你選的 P 偏低或材料屬性壓力較高。'; adv.className='hint bad'; } else if(diff<-10){ adv.textContent='壓力法大幅高於 Kp 法，請確認 P 是否設得偏高。'; adv.className='hint warn'; } else { adv.textContent='兩者相近，表示你設定的 P 與材料特性一致性良好。'; adv.className='hint ok'; } } else { if(elD) elD.textContent='— %'; if(adv) adv.textContent='請在兩邊輸入必要欄位（A、N、以及 P 或 Kp）後再比較。'; adv.className='hint'; }
+    }
+
+    document.getElementById('calcP').addEventListener('click', ()=>{ const F=calcPForce(collectP()); updateResult(F); updateCompare(); });
+    document.getElementById('calcK').addEventListener('click', ()=>{ const F=calcKForce(collectK()); updateResult(F); updateCompare(); });
+
+    document.getElementById('suggestP').addEventListener('click', ()=>{
+      const k=collectK(); const txt=document.getElementById('suggestPText'); if(!isFinite(k?.Kp)||k.Kp<=0){ txt.textContent='請先在 Kp 法輸入 Kp。'; return; } const Pkg=Math.round(k.Kp*1000); txt.innerHTML = `建議 P 起始值：<b>${Pkg} kg/cm²</b>（可視產品/模具/機台微調 ±10～20%）`; const unit=(document.getElementById('pUnit')?.value)||'kgcm2'; const Punit = unit==='kgcm2'?Pkg : (unit==='bar'? (Pkg/1.019716) : (Pkg/10.197162)); document.getElementById('pressure').value = Math.round(Punit*10)/10; });
+
+    function init(){ renderTable(); refreshMaterialSelects(); }
+    init();
+
+    if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('service-worker.js')); }
+  </script>
+</body>
+</html>
